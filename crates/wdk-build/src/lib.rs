@@ -322,6 +322,8 @@ pub enum ApiSubset {
     Base,
     /// API subset required for WDF (Windows Driver Framework) drivers: <https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/_wdf/>
     Wdf,
+    /// API subset for Battery Class miniport drivers: <https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/batclass/>
+    Battery,
     /// API subset for GPIO (General Purpose Input/Output) drivers: <https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/_gpio/>
     Gpio,
     /// API subset for HID (Human Interface Device) drivers: <https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/_hid/>
@@ -814,6 +816,7 @@ impl Config {
         let headers = match api_subset {
             ApiSubset::Base => self.base_headers(),
             ApiSubset::Wdf => self.wdf_headers(),
+            ApiSubset::Battery => self.battery_headers(),
             ApiSubset::Gpio => self.gpio_headers(),
             ApiSubset::Hid => self.hid_headers(),
             ApiSubset::ParallelPorts => self.parallel_ports_headers(),
@@ -850,6 +853,23 @@ impl Config {
         } else {
             vec![]
         }
+    }
+
+    /// Both headers live in the WDK `shared` include directory. `batclass.h`
+    /// does not include `poclass.h` itself, so `poclass.h` is listed first. The
+    /// battery class miniport prototypes and `BATTERY_MINIPORT_INFO` in
+    /// `batclass.h` are hidden once `windows.h` is included, so UMDF builds
+    /// only get the `poclass.h` types and IOCTLs.
+    #[tracing::instrument(level = "trace")]
+    fn battery_headers(&self) -> Vec<&'static str> {
+        let mut headers = vec!["poclass.h"];
+        if matches!(
+            self.driver_config,
+            DriverConfig::Wdm | DriverConfig::Kmdf(_)
+        ) {
+            headers.extend(["batclass.h"]);
+        }
+        headers
     }
 
     #[tracing::instrument(level = "trace")]
@@ -1082,6 +1102,7 @@ impl Config {
     fn libraries(&self, api_subset: ApiSubset) -> Vec<LinkDirective> {
         match api_subset {
             ApiSubset::Base => self.base_libraries(),
+            ApiSubset::Battery => self.battery_libraries(),
             ApiSubset::Hid => self.hid_libraries(),
             ApiSubset::Wdf
             | ApiSubset::Gpio
@@ -1156,6 +1177,21 @@ impl Config {
                 vec![LinkDirective::new("VhfKm")]
             }
             DriverConfig::Umdf(_) => vec![LinkDirective::new("VhfUm")],
+        }
+    }
+
+    /// Returns a [`Vec`] of [`LinkDirective`]s for the [`ApiSubset`]'s variant
+    /// [`ApiSubset::Battery`].
+    ///
+    /// WDM/KMDF drivers link `battc` (the battery class driver, `battc.sys`).
+    /// There is no user-mode battery class library, so UMDF drivers link
+    /// nothing extra.
+    fn battery_libraries(&self) -> Vec<LinkDirective> {
+        match &self.driver_config {
+            DriverConfig::Wdm | DriverConfig::Kmdf(_) => {
+                vec![LinkDirective::new("battc")]
+            }
+            DriverConfig::Umdf(_) => Vec::new(),
         }
     }
 
@@ -2361,6 +2397,39 @@ mod tests {
             let config = config_for("x86_64", DriverConfig::Umdf(UmdfConfig::new()));
 
             assert_eq!(config.hid_libraries(), vec![LinkDirective::new("VhfUm")]);
+        }
+
+        #[test]
+        fn battery_wdm_and_kmdf_link_battc_static() {
+            for driver_config in [DriverConfig::Wdm, DriverConfig::Kmdf(KmdfConfig::new())] {
+                let config = config_for("x86_64", driver_config);
+
+                assert_eq!(
+                    config.battery_libraries(),
+                    vec![LinkDirective::new("battc")]
+                );
+            }
+        }
+
+        #[test]
+        fn battery_umdf_links_nothing() {
+            let config = config_for("x86_64", DriverConfig::Umdf(UmdfConfig::new()));
+
+            assert!(config.battery_libraries().is_empty());
+            assert_eq!(
+                config.bindgen_library_link_raw_lines(ApiSubset::Battery),
+                None
+            );
+        }
+
+        #[test]
+        fn libraries_battery_subset_matches_battery() {
+            let config = config_for("x86_64", DriverConfig::Kmdf(KmdfConfig::new()));
+
+            assert_eq!(
+                config.libraries(ApiSubset::Battery),
+                config.battery_libraries()
+            );
         }
 
         #[test]

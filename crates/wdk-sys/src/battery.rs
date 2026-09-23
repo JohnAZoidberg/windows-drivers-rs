@@ -1,0 +1,44 @@
+// Copyright (c) Microsoft Corporation
+// License: MIT OR Apache-2.0
+
+//! Direct FFI bindings to Battery Class APIs from the Windows Driver Kit (WDK)
+//!
+//! This module contains all bindings to functions, constants, methods,
+//! constructors and destructors in the following headers: `poclass.h`,
+//! `batclass.h`. Types are not included in this module, but are available in
+//! the top-level `wdk_sys` module.
+//!
+//! The battery class miniport interface (`BatteryClassInitializeDevice`,
+//! `BatteryClassIoctl`, `BatteryClassStatusNotify`, `BatteryClassUnload` and
+//! `BATTERY_MINIPORT_INFO`) is kernel-mode only and links against `battc`.
+//! For UMDF drivers this module is empty and only the `poclass.h` types and
+//! `IOCTL_BATTERY_*` constants are available.
+
+#[allow(
+    missing_docs,
+    reason = "most items in the WDK headers have no inline documentation, so bindgen is unable to \
+              generate documentation for their bindings"
+)]
+mod bindings {
+    #[allow(
+        clippy::wildcard_imports,
+        reason = "the underlying c code relies on all type definitions being in scope, which \
+                  results in the bindgen generated code relying on the generated types being in \
+                  scope as well"
+    )]
+    #[allow(
+        unused_imports,
+        reason = "the battery class miniport functions are only declared for kernel-mode drivers, \
+                  so for UMDF there are no functions for bindgen to generate and these types are \
+                  unused"
+    )]
+    use crate::types::*;
+
+    include!(concat!(env!("OUT_DIR"), "/battery.rs"));
+}
+#[allow(
+    unused_imports,
+    reason = "the battery class miniport functions are only declared for kernel-mode drivers, so \
+              for UMDF the `bindings` module is empty"
+)]
+pub use bindings::*;

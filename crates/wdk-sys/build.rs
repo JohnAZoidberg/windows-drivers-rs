@@ -133,6 +133,8 @@ pub static mut {WDFFUNCTIONS_SYMBOL_NAME_PLACEHOLDER}: *const WDFFUNC = core::pt
 const ENABLED_API_SUBSETS: &[ApiSubset] = &[
     ApiSubset::Base,
     ApiSubset::Wdf,
+    #[cfg(feature = "battery")]
+    ApiSubset::Battery,
     #[cfg(feature = "gpio")]
     ApiSubset::Gpio,
     #[cfg(feature = "hid")]
@@ -153,6 +155,8 @@ const BINDGEN_FILE_GENERATORS_TUPLES: &[(&str, GenerateFn)] = &[
     ("types.rs", generate_types),
     ("base.rs", generate_base),
     ("wdf.rs", generate_wdf),
+    #[cfg(feature = "battery")]
+    ("battery.rs", generate_battery),
     #[cfg(feature = "gpio")]
     ("gpio.rs", generate_gpio),
     #[cfg(feature = "hid")]
@@ -323,6 +327,40 @@ fn generate_wdf(out_path: &Path, config: &Config) -> Result<(), ConfigError> {
         );
         Ok(())
     }
+}
+
+#[cfg(feature = "battery")]
+fn generate_battery(out_path: &Path, config: &Config) -> Result<(), ConfigError> {
+    info!("Generating bindings to WDK: battery.rs");
+
+    let header_contents =
+        config.bindgen_header_contents([ApiSubset::Base, ApiSubset::Wdf, ApiSubset::Battery])?;
+    trace!(header_contents = ?header_contents);
+
+    let bindgen_builder = {
+        let mut builder = bindgen::Builder::wdk_default(config)?
+            .with_codegen_config((CodegenConfig::TYPES | CodegenConfig::VARS).complement())
+            .header_contents("battery-input.h", &header_contents);
+
+        // Only allowlist files in the battery-specific files to avoid
+        // duplicate definitions
+        for header_file in config.headers(ApiSubset::Battery)? {
+            builder = builder.allowlist_file(format!("(?i).*{header_file}.*"));
+        }
+
+        if let Some(raw_lines) = config.bindgen_library_link_raw_lines(ApiSubset::Battery) {
+            builder = builder.raw_line(raw_lines);
+        }
+        builder
+    };
+    trace!(bindgen_builder = ?bindgen_builder);
+
+    let output_file_path = out_path.join("battery.rs");
+    Ok(bindgen_builder
+        .generate()
+        .expect("Bindings should succeed to generate")
+        .write_to_file(&output_file_path)
+        .map_err(|source| IoError::with_path(output_file_path, source))?)
 }
 
 #[cfg(feature = "gpio")]

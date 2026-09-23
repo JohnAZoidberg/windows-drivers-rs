@@ -19,7 +19,7 @@ Rust crates for developing Windows Drivers (WDM, KMDF, UMDF). The workspace only
 **Key design patterns:**
 
 - Conditional compilation via custom `cfg` flags (not Cargo features) distinguishes driver types. These flags are emitted by `wdk-build` during the build script phase.
-- `wdk-sys` has feature flags for optional WDK subsystem bindings: `gpio`, `hid`, `spb`, `storage`, `usb`, `parallel-ports`.
+- `wdk-sys` has feature flags for optional WDK subsystem bindings: `battery`, `gpio`, `hid`, `spb`, `storage`, `usb`, `parallel-ports`.
 - Some crates expose a `nightly` feature for functionality gated behind unstable Rust features.
 
 ## Build, Test, and Lint

@@ -35,6 +35,16 @@ pub mod wdf;
         driver_model__driver_type = "KMDF",
         driver_model__driver_type = "UMDF"
     ),
+    feature = "battery"
+))]
+pub mod battery;
+
+#[cfg(all(
+    any(
+        driver_model__driver_type = "WDM",
+        driver_model__driver_type = "KMDF",
+        driver_model__driver_type = "UMDF"
+    ),
     feature = "gpio"
 ))]
 pub mod gpio;
